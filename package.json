@@ -1,0 +1,12 @@
+{
+  "name": "scrool",
+  "version": "1.0.0",
+  "description": "",
+  "main": "js.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "watch": "browser-sync --server --files \"*.html, ./css/*.css, ./js/*.js\""
+  },
+  "author": "",
+  "license": "ISC"
+}
