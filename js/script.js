@@ -7,6 +7,9 @@ let context = canvas.getContext("2d");
 
 context.strokeStyle = "red"
 
+CNV.setContext(context);
+
+
 const shift = {
     top: window.canvas.getBoundingClientRect().top,
     left: window.canvas.getBoundingClientRect().left
@@ -80,26 +83,41 @@ function isInLine(e, callbackSuccess, callbackFail){
     let x0 = e.clientX
     let y0 = e.clientY
 
+    let successHandlers = [];
+    let failHandlers = [];
+
     for(let i = 0; i < state.lines.length; i++){
-        let x1 = state.lines[i].start.x
-        let y1 = state.lines[i].start.y
-        let x2 = state.lines[i].end.x
-        let y2 = state.lines[i].end.y
-        //проверяем, не вышел ли за пределы координат икса курсор
-        if((x0 > x1 - 10) &&  (x0 < x2 + 10) || (x0 > x2 - 10) &&  (x0 < x1 + 10)){
-            //ищем расстояние от мышки до прямой
-            let len = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
-            let distance = Math.abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - x1 * y2) / len;
-            if(distance < 10){
-                drawLine(state.lines[i], "black");
-                if(callbackSuccess) callbackSuccess(state.lines[i]);
+        //заполняем хендлеры
+        successHandlers = [];
+        failHandlers = [];
 
-                break;
-            } else {
-                if(callbackFail) callbackFail(state.lines[i]);
+        if(callbackSuccess) successHandlers.push(callbackSuccess.bind(this, state.lines[i]));
 
-            }
-        }
+        //при наведении на линию, она всегда должна подсвечиваться. Потому выновим отдельно этот handler
+        successHandlers.push(CNV.line.bind(CNV, {
+            x0: state.lines[i].start.x,
+            y0: state.lines[i].start.y,
+            x1: state.lines[i].end.x,
+            y1: state.lines[i].end.y,
+            color: "black"
+        }));
+
+        if(callbackFail) failHandlers.push(callbackFail.bind(this, state.lines[i]));
+
+        let result = CNV.nearLine(
+            {
+                distance: 10,
+                userX: x0,
+                userY: y0,
+                x1: state.lines[i].start.x,
+                y1: state.lines[i].start.y,
+                x2: state.lines[i].end.x,
+                y2: state.lines[i].end.y,
+            },
+            successHandlers,
+            failHandlers,
+        )
+        if(result) break;
     }
 
 }
@@ -113,7 +131,12 @@ function isInHead(e){
         let headY = state.lines[i].end.y;
         if((x < headX + 10 && x > headX - 10) && (y < headY + 10 && y > headY - 10) && state.lines[i].children.length < 2){
             document.body.style.cursor = "pointer";
-            drawCircle(headX, headY);
+            CNV.circle({
+                x0: headX,
+                y0: headY,
+                radius: 10,
+            })
+
             window.canvas.onclick = (e)=> click(e, state.lines[i]);
             break;
         } else {
@@ -142,32 +165,27 @@ function addNewLine(start, end, parentLine){
         parentLine.children.push(line);
         parentLine.circle = true;
     }
-
 }
 
-window.canvas.addEventListener("mousemove", isInHead);
-window.canvas.addEventListener("mousemove", isInLine);
 
-function drawLine(line, color = "red"){
-    context.beginPath();
-    context.moveTo(line.start.x, line.start.y);
-    context.lineTo(line.end.x, line.end.y);
-    context.strokeStyle = color;
-    context.lineWidth = 5;
-    context.stroke();
-}
-
-function drawLines(line) {
+function drawLines() {
     state.lines.forEach(line => {
-        context.beginPath();
-        context.moveTo(line.start.x, line.start.y);
-        context.lineTo(line.end.x, line.end.y);
-        context.strokeStyle = "red";
-        context.lineWidth = 5;
-        context.stroke();
+        CNV.line({
+            x0: line.start.x,
+            y0: line.start.y,
+            x1: line.end.x,
+            y1: line.end.y,
+            color: "red",
+            lineWidth: 5,
+        })
 
         if(line.circle){
-            drawCircle(line.end.x, line.end.y);
+            CNV.circle({
+                x0: line.end.x,
+                y0: line.end.y,
+                color: "red",
+                radius: 10,
+            })
         }
 
     })
@@ -181,18 +199,12 @@ function redraw(lines){
     drawLines(lines);
 }
 
-function drawCircle(x, y){
-    context.beginPath();
-    context.arc(x, y, 10, 0, 2 * Math.PI);
-    context.fillStyle = "red";
-    context.fill();
-}
-
 function draw(e, start){
     let {top, left} = window.canvas.getBoundingClientRect();
 
     redraw(state.lines);
 
+    //рисование так, без вызова лишней обёрточной функции будет быстрее. Потому оставлю так
     context.lineWidth = 5;
     context.beginPath();
     context.moveTo(start.x, start.y);
@@ -203,9 +215,6 @@ function draw(e, start){
     state.lastDrewPoint.x = e.clientX - left;
     state.lastDrewPoint.y = e.clientY - top;
 }
-
-
-//let startLine = [{}, {}];
 
 function click(e, parentLine){
     state.startLine[0] = state.startLine[1];
@@ -228,5 +237,8 @@ function click(e, parentLine){
         state.isDragging = false;
     }
 }
+
+window.canvas.addEventListener("mousemove", isInHead);
+window.canvas.addEventListener("mousemove", isInLine);
 window.canvas.onclick = click;
 delLineBtn.onclick = delLineHandler;
